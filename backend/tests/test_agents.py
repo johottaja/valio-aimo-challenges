@@ -46,14 +46,14 @@ async def test_model_cannot_invent_catalog_ids(settings, monkeypatch):
     settings.gemini_api_key = "test-key-not-a-real-secret"
     monkeypatch.setattr("app.agents.genai.Client", lambda **kw: FakeClient('{"product_ids":["invented"],"reason":"selected"}'))
     with pytest.raises(AgentError, match="relevance"):
-        await MatchingAgent(settings).narrow(BasketLine(description="milk", quantity=10, unit="L"), [{"id": "valid", "name": "Milk"}], False)
+        await MatchingAgent(settings).narrow(BasketLine(description="milk", quantity=10, unit="L"), [{"id": "valid", "name": "Milk"}])
 
 
 async def test_matching_validation_diagnostics_do_not_log_response(settings, monkeypatch, caplog):
     settings.gemini_api_key = "test-key-not-a-real-secret"
     monkeypatch.setattr("app.agents.genai.Client", lambda **kw: FakeClient('{"product_ids":"private-response", "reason":"selected"}'))
     with pytest.raises(AgentError):
-        await MatchingAgent(settings).narrow(BasketLine(description="milk", quantity=900, unit="L"), [{"id": "valid", "name": "Milk"}], False)
+        await MatchingAgent(settings).narrow(BasketLine(description="milk", quantity=900, unit="L"), [{"id": "valid", "name": "Milk"}])
     assert "response validation" in caplog.text
     assert "list_type" in caplog.text
     assert "private-response" not in caplog.text
@@ -71,8 +71,22 @@ async def test_matching_allows_reasoning_tokens_and_reports_truncation(settings,
     settings.gemini_api_key = "test-key-not-a-real-secret"
     monkeypatch.setattr("app.agents.genai.Client", lambda **kw: TruncatedClient())
     with pytest.raises(AgentError):
-        await MatchingAgent(settings).narrow(BasketLine(description="milk", quantity=900, unit="L"), [{"id": "valid", "name": "Milk"}], False)
+        await MatchingAgent(settings).narrow(BasketLine(description="milk", quantity=900, unit="L"), [{"id": "valid", "name": "Milk"}])
     assert "finish reason: MAX_TOKENS" in caplog.text
+
+
+async def test_product_choices_reject_invented_ids(settings, monkeypatch):
+    settings.gemini_api_key = "test-key-not-a-real-secret"
+    monkeypatch.setattr("app.agents.genai.Client", lambda **kw: FakeClient('{"choices":[{"label":"Organic oats","product_ids":["invented"]},{"label":"Rolled oats","product_ids":["real"]}]}'))
+    with pytest.raises(AgentError):
+        await MatchingAgent(settings).product_choices(BasketLine(description="oats", quantity=10, unit="kg"), [{"id":"real", "name":"Rolled oats"}, {"id":"other", "name":"Organic oats"}])
+
+
+async def test_product_choices_return_catalog_groups(settings, monkeypatch):
+    settings.gemini_api_key = "test-key-not-a-real-secret"
+    monkeypatch.setattr("app.agents.genai.Client", lambda **kw: FakeClient('{"choices":[{"label":"Organic oats","product_ids":["other"]},{"label":"Rolled oats","product_ids":["real"]}]}'))
+    choices = await MatchingAgent(settings).product_choices(BasketLine(description="oats", quantity=10, unit="kg"), [{"id":"real", "name":"Rolled oats"}, {"id":"other", "name":"Organic oats"}])
+    assert [(c.label, c.product_ids) for c in choices] == [("Organic oats", ["other"]), ("Rolled oats", ["real"])]
 
 
 async def test_natural_language_oats_uses_sdk_compatible_schema(settings, monkeypatch):

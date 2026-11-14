@@ -30,22 +30,21 @@ class StrictModel(BaseModel):
 
 class BasketLine(StrictModel):
     description: str = Field(min_length=2, max_length=200)
-    quantity: Decimal = Field(gt=0, le=1000000, max_digits=12, decimal_places=4)
+    quantity: Decimal = Field(gt=0, allow_inf_nan=False)
     unit: Unit
     requirements: list[Attribute] = Field(default_factory=list, max_length=3)
 
 
 class PurchaseRequest(StrictModel):
     text: str = Field(default="", max_length=3000)
-    preset: Literal["routine", "approval"] | None = None
     items: list[BasketLine] = Field(default_factory=list, max_length=10)
     needed_by: date = Field(default_factory=next_monday)
     location: str = Field(default="hotel-helsinki", min_length=1, max_length=100)
 
     @model_validator(mode="after")
     def has_input(self):
-        if not self.preset and not self.items and not self.text.strip():
-            raise ValueError("Describe the products you need or select an example.")
+        if not self.items and not self.text.strip():
+            raise ValueError("Describe the products and quantities you need.")
         return self
 
 
@@ -56,7 +55,7 @@ class ParsedBasket(StrictModel):
 
 class QuantityRule(StrictModel):
     group: str = Field(min_length=1, max_length=80, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9 _-]*$")
-    limit: Decimal = Field(gt=0, le=1000000)
+    limit: Decimal = Field(gt=0, allow_inf_nan=False)
     unit: Unit
 
     @field_validator("group")
@@ -77,7 +76,7 @@ class AttributeRule(StrictModel):
 
 class Policy(StrictModel):
     version: int = Field(default=1, ge=1)
-    spend_limit: Decimal = Field(default=Decimal("10000"), gt=0, le=1000000, decimal_places=2)
+    spend_limit: Decimal = Field(default=Decimal("10000"), gt=0, allow_inf_nan=False)
     location: str = Field(default="hotel-helsinki", min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9 _-]*$")
     quantity_rules: list[QuantityRule] = Field(default_factory=lambda: [QuantityRule(group="milk", limit=1000, unit="L")], max_length=10)
     attribute_rules: list[AttributeRule] = Field(default_factory=lambda: [AttributeRule(group="milk", attribute="lactose_free")], max_length=10)
@@ -152,7 +151,44 @@ class OrderReceipt(BaseModel):
     preview: BasketPreview
 
 
+class ProductChoice(BaseModel):
+    label: str = Field(min_length=2, max_length=120)
+    product_ids: list[str] = Field(min_length=1, max_length=16)
+
+
+class ChoiceSelection(StrictModel):
+    revision: int
+    line_index: int = Field(ge=0)
+    choice_index: int = Field(ge=0)
+
+
 class RequestView(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_saved_preset_input(cls, value):
+        """Read historical snapshots without accepting presets on new requests.
+
+        Recovery writes the normalized snapshot back to storage. Preserve the
+        interpreted basket when present, including any customer product choices.
+        Older requests that never reached interpretation retain their original
+        preset quantities as ordinary basket data.
+        """
+        if not isinstance(value, dict) or not isinstance(value.get("input"), dict):
+            return value
+        legacy_input = value["input"]
+        if "preset" not in legacy_input:
+            return value
+        preset = legacy_input["preset"]
+        if preset not in (None, "routine", "approval"):
+            return value  # Unknown stored data must not be silently discarded.
+        migrated_input = {key: item for key, item in legacy_input.items() if key != "preset"}
+        if preset and not migrated_input.get("items"):
+            migrated_input["items"] = value.get("items") or [
+                {"description": "lactose-free milk", "quantity": 500 if preset == "routine" else 1500, "unit": "L", "requirements": ["lactose_free"]},
+                {"description": "rolled oats", "quantity": 10, "unit": "kg", "requirements": []},
+            ]
+        return {**value, "input": migrated_input}
+
     id: str
     status: Status
     created_at: str
@@ -160,7 +196,9 @@ class RequestView(BaseModel):
     input: PurchaseRequest
     items: list[BasketLine]
     alternatives: list[list[Offer]]
-    clarification_choices: list[list[str]] = Field(default_factory=list)
+    product_choices: list[ProductChoice] = Field(default_factory=list)
+    choice_line_index: int | None = None
+    chosen_product_ids: dict[str, list[str]] = Field(default_factory=dict)
     preview: BasketPreview | None
     decision: PolicyDecision | None
     receipt: OrderReceipt | None

@@ -89,12 +89,12 @@ class Catalog:
             row = conn.execute("SELECT data FROM products WHERE id=?", (product_id,)).fetchone()
         return json.loads(row[0]) if row else None
 
-    def search(self, query: str, limit: int = 16, preset: bool = False) -> list[dict]:
+    def search(self, query: str, limit: int = 16, reviewed: bool = False) -> list[dict]:
         if not self.count():
             return []
         words = re.findall(r"[\w]+", query.lower())
         kind = "milk" if "milk" in words else "oats" if any(w in words for w in ["oats", "oat", "rolled"]) else None
-        if preset and kind:
+        if reviewed and kind:
             return [p for pid in DEMO_IDS[kind] if (p := self.get(pid))]
         # Search names, not marketing copy, to reduce incidental matches.
         ignored = {"free", "lactose", "gluten", "vegan", "of", "the", "and", "for", "kg", "litres", "liters"}

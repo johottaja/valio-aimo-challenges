@@ -109,7 +109,7 @@ class Workflow:
                 raise WorkflowError("demo_limit", "Start a fresh demo to submit more requests.", 429)
             rid = "REQ-" + secrets.token_hex(4).upper()
             timestamp = now().isoformat()
-            state = RequestView(id=rid, status="received", created_at=timestamp, updated_at=timestamp, input=request, items=[], alternatives=[], preview=None, decision=None, receipt=None, message="Your purchasing agent is starting.", agent_mode="Gemini" if self.settings.gemini_api_key and not request.preset and not request.items else "Preset mode" if request.preset else "Structured basket", data_mode=self.settings.aimo_mode, events=[], revision=1)
+            state = RequestView(id=rid, status="received", created_at=timestamp, updated_at=timestamp, input=request, items=[], alternatives=[], preview=None, decision=None, receipt=None, message="Your purchasing agent is starting.", agent_mode="Purchasing agent", data_mode=self.settings.aimo_mode, events=[], revision=1)
             add_event(state, "Purchasing agent", "Request received", request.text or "Structured basket received.", {"input": request.model_dump(mode="json")})
             db.add(Purchase(id=rid, sandbox_id=sandbox_id, idempotency_key=key, payload_hash=payload_hash, state=state.model_dump_json(), revision=1))
         return state, True
@@ -193,8 +193,20 @@ class Workflow:
                 state.alternatives = []
                 selected = []
                 for index, line in enumerate(state.items):
-                    candidates = self.catalog.search(line.description, preset=bool(state.input.preset))
-                    candidates, explanation = await self.matcher.narrow(line, candidates, bool(state.input.preset))
+                    chosen_ids = state.chosen_product_ids.get(str(index))
+                    if chosen_ids is not None:
+                        candidates = [p for product_id in chosen_ids if (p := self.catalog.get(product_id))]
+                        explanation = "Customer chose this catalog product group."
+                    else:
+                        candidates = self.catalog.search(line.description)
+                        candidates, explanation = await self.matcher.narrow(line, candidates)
+                        choices = await self.matcher.product_choices(line, candidates)
+                        if choices:
+                            state.product_choices, state.choice_line_index = choices, index
+                            state.status, state.message = "needs_information", f"Choose which type of {line.description} you want. Nothing has been ordered."
+                            add_event(state, "Purchasing agent", "Product choice needed", state.message)
+                            self.update(sandbox_id, state)
+                            return
                     if candidates:
                         price, stock, source = await self.provider.quote(candidates, state.input.needed_by)
                         offers = rank_offers([build_offer(p, line, price.get(p["id"], {}), stock.get(p["id"], {}), source, state.input.needed_by, policy) for p in candidates])
@@ -209,16 +221,11 @@ class Workflow:
                 check_combined_stock(selected)
                 if len(selected) != len(state.items) or any(not o.eligible for o in selected):
                     missing = [line.description for line, options in zip(state.items, state.alternatives) if not any(o.eligible for o in options)]
-                    state.message = "Preparing choices to help you refine your basket. This can take a little while."
-                    self.update(sandbox_id, state)
-                    state.clarification_choices = []
-                    for line, options in zip(state.items, state.alternatives):
-                        if any(o.eligible for o in options):
-                            state.clarification_choices.append([])
-                        else:
-                            products = [{"name": offer.name} for offer in options]
-                            state.clarification_choices.append(await self.matcher.suggest_choices(line, products))
                     state.status, state.message = "needs_information", f"No complete eligible basket: review {', '.join(missing) or 'the combined quantities of repeated products'}. Nothing has been ordered."
+                    for line, options in zip(state.items, state.alternatives):
+                        if options and not any(o.eligible for o in options):
+                            quantity_issue = next((r for o in options for r in o.reasons if "are needed" in r or "Combined basket needs" in r), None)
+                            state.message += f" {line.description}: {quantity_issue or options[0].reasons[0]}"
                     add_event(state, "Policy engine", "Basket needs attention", state.message)
                     self.update(sandbox_id, state)
                     return
@@ -346,9 +353,27 @@ class Workflow:
                 raise WorkflowError("cannot_retry", "This request cannot be restarted in its current state.")
             if request is not None:
                 state.input = request
-                state.agent_mode = "Structured basket" if request.items else "Gemini" if self.settings.gemini_api_key else "Preset mode"
-            state.status, state.preview, state.decision, state.alternatives, state.clarification_choices = "received", None, None, [], []
+                state.chosen_product_ids = {}
+                state.agent_mode = "Purchasing agent"
+            state.status, state.preview, state.decision, state.alternatives = "received", None, None, []
+            state.product_choices, state.choice_line_index = [], None
             add_event(state, "Customer", "Request refreshed", "Rechecking the complete basket against current rules and upstream evidence.")
+            self.update(sandbox_id, state)
+        self.start(sandbox_id, request_id)
+        return state
+
+    async def choose_product(self, sandbox_id: str, request_id: str, selection) -> RequestView:
+        async with self.lock(request_id):
+            state = self.get(sandbox_id, request_id)
+            if state.status != "needs_information" or state.revision != selection.revision or state.choice_line_index != selection.line_index or selection.choice_index >= len(state.product_choices):
+                raise WorkflowError("selection_conflict", "These choices are no longer current. Refresh the request.")
+            choice = state.product_choices[selection.choice_index]
+            state.chosen_product_ids[str(selection.line_index)] = choice.product_ids
+            state.input = state.input.model_copy(update={"items": state.items})
+            state.product_choices, state.choice_line_index = [], None
+            state.alternatives, state.preview, state.decision = [], None, None
+            state.status, state.message = "received", "Checking the product type you chose."
+            add_event(state, "Customer", "Product type selected", choice.label, {"product_ids": choice.product_ids})
             self.update(sandbox_id, state)
         self.start(sandbox_id, request_id)
         return state

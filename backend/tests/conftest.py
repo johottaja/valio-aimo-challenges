@@ -44,8 +44,12 @@ async def finish(app):
     await asyncio.gather(*list(app.state.workflow.tasks.values()))
 
 
+def basket(amount=500):
+    return {"items": [{"description": "lactose-free milk", "quantity": amount, "unit": "L", "requirements": ["lactose_free"]}, {"description": "rolled oats", "quantity": 10, "unit": "kg"}]}
+
+
 async def submit(app, client, body=None, key="test-request-key"):
-    response = await client.post("/api/v1/requests", json=body or {"preset": "routine"}, headers={"Idempotency-Key": key})
+    response = await client.post("/api/v1/requests", json=body or basket(), headers={"Idempotency-Key": key})
     assert response.status_code == 202, response.text
     await finish(app)
     return (await client.get("/api/v1/requests/" + response.json()["id"])).json()

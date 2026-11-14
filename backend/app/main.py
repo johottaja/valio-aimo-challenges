@@ -11,7 +11,7 @@ from sqlalchemy import delete, select
 
 from .config import Settings, get_settings
 from .db import Database, Order, Purchase, Reservation, Sandbox, new_sandbox
-from .schemas import ApprovalDecision, ApiIssue, OfferSelection, OrderReceipt, Policy, PurchaseRequest, RequestView, RoleSelection, SessionView, next_monday, now
+from .schemas import ApprovalDecision, ApiIssue, ChoiceSelection, OfferSelection, OrderReceipt, Policy, PurchaseRequest, RequestView, RoleSelection, SessionView, next_monday, now
 from .workflow import Workflow, WorkflowError, add_event
 
 
@@ -159,6 +159,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def clarify(request_id: str, payload: PurchaseRequest, sandbox: Annotated[Sandbox, Depends(customer)]):
         return await workflow.retry(sandbox.id, request_id, payload)
 
+    @app.post("/api/v1/requests/{request_id}/choose-product", response_model=RequestView, status_code=202)
+    async def choose_product(request_id: str, selection: ChoiceSelection, sandbox: Annotated[Sandbox, Depends(customer)]):
+        return await workflow.choose_product(sandbox.id, request_id, selection)
+
     @app.post("/api/v1/requests/{request_id}/select", response_model=RequestView)
     async def select_offers(request_id: str, selection: OfferSelection, sandbox: Annotated[Sandbox, Depends(customer)]):
         async with workflow.lock(request_id):
@@ -219,12 +223,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             results = []
             try:
                 for line in [BasketLine(description="lactose-free milk", quantity=1500, unit="L", requirements=["lactose_free"]), BasketLine(description="rolled oats", quantity=10, unit="kg")]:
-                    candidates = workflow.catalog.search(line.description, preset=True)
+                    candidates = workflow.catalog.search(line.description, reviewed=True)
                     prices, stock, source = await workflow.provider.quote(candidates, next_monday())
                     eligible = [build_offer(p, line, prices.get(p["id"], {}), stock.get(p["id"], {}), source, next_monday(), policy) for p in candidates]
                     results.append({"need": line.description, "eligible": sum(o.eligible for o in eligible), "issues": [r for o in eligible for r in o.reasons]})
-                checks["presets"] = results
-                checks["preset_ready"] = all(r["eligible"] for r in results)
+                checks["catalog_samples"] = results
+                checks["catalog_samples_ready"] = all(r["eligible"] for r in results)
             except UpstreamError as exc:
                 checks["error"] = str(exc)
         return checks
