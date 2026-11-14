@@ -64,13 +64,6 @@ export function PurchaseForm({ session }: { session: Session }) {
         <div>
           <p className="eyebrow mb-3">Your purchasing agent</p>
           <h1 className="page-title max-w-xl">What does your kitchen need?</h1>
-          <p className="mt-3 max-w-lg text-sm leading-6 text-muted-foreground">
-            One request. A complete basket. Your rules at every step.
-          </p>
-        </div>
-        <div className="hidden items-center gap-2 rounded-full border border-border bg-white px-3 py-2 text-[10px] font-medium text-muted-foreground xl:flex">
-          <span className="size-1.5 rounded-full bg-emerald-600" />
-          Your own demo sandbox
         </div>
       </div>
       {pending.length > 0 && (
@@ -123,6 +116,11 @@ export function PurchaseForm({ session }: { session: Session }) {
                     maxLength={3000}
                     required
                   />
+                {!text.trim() && (
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    <strong className="font-semibold text-foreground">Note!</strong> This field simulates what an ordering agent would send to the system via an MCP server.
+                  </p>
+                )}
                 {!session.gemini_ready && (
                   <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-5 text-muted-foreground">
                     <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />

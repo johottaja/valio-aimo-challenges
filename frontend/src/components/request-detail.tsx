@@ -630,7 +630,7 @@ function Progress({ status }: { status: string }) {
               className={cn(
                 "flex size-8 items-center justify-center rounded-full border text-[11px] font-semibold",
                 i < current || status === "committed"
-                  ? "border-blue-100 bg-blue-50 text-primary"
+                  ? "border-[#d1dde3] bg-[#f2f7f8] text-primary"
                   : i === current
                     ? "border-primary bg-primary text-white"
                     : "border-border bg-white text-muted-foreground",
@@ -716,7 +716,7 @@ function Basket({
                   {attr.replaceAll("_", "-")}
                 </span>
               ))}
-            <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-1 text-[10px] font-medium text-primary">
+            <span className="inline-flex items-center gap-1 rounded bg-[#f2f7f8] px-2 py-1 text-[10px] font-medium text-primary">
               <Check className="size-3" aria-hidden />
               Delivery checked
             </span>
@@ -733,7 +733,7 @@ function Basket({
                   className={cn(
                     "rounded-lg border p-3",
                     offer.id === item.id
-                      ? "border-blue-200 bg-blue-50/30"
+                      ? "border-[#b2ccd4] bg-[#f2f7f8]"
                       : "border-border",
                   )}
                 >

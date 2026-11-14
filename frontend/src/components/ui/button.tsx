@@ -8,7 +8,7 @@ const variants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-white hover:bg-primary-hover",
+        default: "bg-accent text-foreground hover:bg-accent-hover",
         secondary:
           "border border-border bg-white text-foreground hover:bg-muted",
         ghost: "text-muted-foreground hover:bg-muted hover:text-foreground",

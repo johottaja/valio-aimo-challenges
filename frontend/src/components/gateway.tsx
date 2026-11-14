@@ -42,24 +42,12 @@ import { PurchaseForm } from "./purchase-form";
 import { RequestDetail } from "./request-detail";
 import { Rules } from "./rules";
 
-export function Brand({ light = false }: { light?: boolean }) {
+export function Brand() {
   return (
-    <Link
-      href="/"
-      aria-label="Aimo Trust Gateway home"
-      className={cn("flex items-center gap-3", light && "text-white")}
-    >
-      <span className="flex size-9 items-center justify-center rounded-[10px] bg-foreground text-white">
-        <ShieldCheck className="size-[22px]" strokeWidth={1.7} aria-hidden />
-      </span>
-      <span>
-        <span className="block text-[21px] font-bold leading-6 tracking-[-.05em]">
-          aimo<span className="text-primary">.</span>
-        </span>
-        <span className="block text-[9px] font-semibold uppercase tracking-[.16em] opacity-65">
-          Trust Gateway
-        </span>
-      </span>
+    <Link href="/" aria-label="Valio Aimo Trust Gateway home" className="inline-flex flex-col items-start gap-1.5">
+      {/* Official Valio Aimo wordmark, published on valioaimo.fi. */}
+      <img src="/valio-aimo-logo.svg" alt="Valio Aimo" className="h-auto w-[112px]" />
+      <span className="text-[9px] font-bold uppercase tracking-[.16em] text-foreground">Trust Gateway</span>
     </Link>
   );
 }
@@ -322,7 +310,7 @@ export function Gateway({ route }: { route: string[] }) {
                 className={cn(
                   "flex min-h-11 items-center gap-3 rounded-lg px-3 text-[13px] font-medium transition-colors",
                   navActive(item.href)
-                    ? "bg-blue-50 text-primary"
+                    ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
@@ -335,7 +323,7 @@ export function Gateway({ route }: { route: string[] }) {
             ))}
           </nav>
           <div className="mt-auto px-5 pb-6">
-            <div className="mb-5 rounded-xl border border-border bg-background p-3.5">
+            <div className="mb-5 border-l-[3px] border-accent bg-background p-3.5">
               <div className="mb-2 flex items-center gap-2 text-xs font-semibold">
                 <ShieldCheck className="size-4 text-primary" aria-hidden />
                 Customer control
@@ -395,7 +383,7 @@ export function Gateway({ route }: { route: string[] }) {
               className={cn(
                 "inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-medium",
                 navActive(item.href)
-                  ? "bg-blue-50 text-primary"
+                  ? "bg-muted text-foreground"
                   : "text-muted-foreground",
               )}
             >
@@ -464,114 +452,41 @@ function Landing({
 }) {
   return (
     <div className="min-h-screen bg-background">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-7 sm:px-10">
+      <header className="mx-auto flex max-w-6xl items-center justify-between gap-4 border-b border-border px-6 py-6 sm:px-10">
         <Brand />
-        <span className="rounded-full border border-border bg-white px-3 py-1.5 text-[10px] font-medium text-muted-foreground">
-          Junction 2026 · Valio Aimo challenge
-        </span>
+        <span className="text-right text-[11px] font-medium leading-5 text-muted-foreground">Junction 2026 <span className="px-1">/</span> Valio Aimo challenge</span>
       </header>
-      <main className="mx-auto max-w-5xl px-6 pt-12 pb-16 sm:px-10 sm:pt-20">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.1em] text-primary">
-          <span className="size-1.5 rounded-full bg-primary" />
-          Agent-led. Customer-controlled.
+      <main className="mx-auto max-w-6xl px-6 pb-16 sm:px-10">
+        <div className="grid gap-8 border-b border-border py-14 sm:py-20 md:grid-cols-[1fr_240px] md:items-end">
+          <div>
+            <p className="eyebrow mb-5">Purchasing, with oversight</p>
+            <h1 className="max-w-[720px] text-[40px] font-semibold leading-[1.08] tracking-[-.045em] sm:text-[60px]">The next order.<br /><span className="text-muted-foreground">In trusted hands.</span></h1>
+            <p className="mt-6 max-w-xl text-base leading-7 text-muted-foreground">Let your purchasing agent find the right products. Keep your rules, your approvals, and a clear record of every decision.</p>
+          </div>
+          <p className="border-l-[3px] border-accent pl-4 text-xs leading-6 text-muted-foreground">Agents recommend.<br />Rules authorize.<br />You approve exceptions.</p>
         </div>
-        <h1 className="max-w-[760px] text-[42px] font-semibold leading-[1.13] tracking-[-.055em] sm:text-[62px]">
-          The next order.
-          <br />
-          <span className="text-muted-foreground">In trusted hands.</span>
-        </h1>
-        <p className="mt-6 max-w-lg text-base leading-7 text-muted-foreground">
-          Let your purchasing agent find the right products. Keep your rules,
-          your approvals, and a clear record of every decision.
-        </p>
-        <div className="mt-10">
-          <ErrorNotice error={error} />
+        <div className="mt-10 flex flex-wrap items-end justify-between gap-3">
+          <div><p className="eyebrow mb-2">Get started</p><h2 className="text-xl font-semibold tracking-tight">Choose a workspace</h2></div>
+          <p className="text-xs text-muted-foreground">No signup required</p>
         </div>
-        <div className="mt-5 grid gap-5 md:grid-cols-2">
+        <div className="mt-4"><ErrorNotice error={error} /></div>
+        <div className="grid border-t-2 border-primary md:grid-cols-2">
           {[
-            {
-              role: "customer" as const,
-              icon: ShoppingBasket,
-              label: "For the kitchen",
-              title: "Customer workspace",
-              text: "Tell your agent what you need. Review a basket when it needs your approval.",
-              action: "Enter as customer",
-              accent: true,
-            },
-            {
-              role: "aimo" as const,
-              icon: Layers3,
-              label: "Behind the gateway",
-              title: "Aimo workspace",
-              text: "Follow each request, inspect the evidence, and see how customer rules were enforced.",
-              action: "Enter as Aimo operator",
-              accent: false,
-            },
+            { role: "customer" as const, number: "01", label: "For the kitchen", title: "Customer workspace", text: "Tell your agent what you need. Review a basket when it needs your approval.", action: "Enter as customer" },
+            { role: "aimo" as const, number: "02", label: "For operations", title: "Aimo workspace", text: "Follow each request, inspect the evidence, and see how customer rules were enforced.", action: "Enter as Aimo operator" },
           ].map((item) => (
-            <button
-              key={item.role}
-              onClick={() => {
-                void onSelect(item.role);
-              }}
-              disabled={loading || !session}
-              className={cn(
-                "group panel relative flex min-h-[250px] flex-col p-7 text-left transition-colors disabled:cursor-wait disabled:opacity-60 sm:p-8",
-                item.accent
-                  ? "border-blue-200 hover:border-primary"
-                  : "hover:border-slate-400",
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className={cn(
-                    "flex size-11 items-center justify-center rounded-xl",
-                    item.accent
-                      ? "bg-blue-50 text-primary"
-                      : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  <item.icon className="size-5" aria-hidden />
-                </span>
-                <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-                  {item.label}
-                </span>
-              </div>
-              <h2 className="mt-6 text-xl font-semibold tracking-tight">
-                {item.title}
-              </h2>
-              <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-                {item.text}
-              </p>
-              <span
-                className={cn(
-                  "mt-6 flex items-center gap-2 text-xs font-semibold",
-                  item.accent ? "text-primary" : "text-foreground",
-                )}
-              >
-                {loading ? "Preparing workspace…" : item.action}
-                <ArrowRight className="size-4" aria-hidden />
-              </span>
+            <button key={item.role} onClick={() => { void onSelect(item.role); }} disabled={loading || !session} className="group flex min-h-[220px] flex-col border-b border-border py-6 text-left transition-colors hover:bg-white/60 disabled:cursor-wait disabled:opacity-60 md:px-7 md:first:border-r md:first:pl-0 md:last:pr-0">
+              <div className="flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-[.1em] text-muted-foreground"><span>{item.label}</span><span className="tabular">{item.number}</span></div>
+              <h3 className="mt-7 text-xl font-semibold tracking-tight">{item.title}</h3>
+              <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">{item.text}</p>
+              <span className="mt-auto flex items-center gap-2 pt-6 text-xs font-semibold text-primary">{loading ? "Preparing workspace…" : item.action}<ArrowRight className="size-4 transition-transform group-hover:translate-x-1" aria-hidden /></span>
             </button>
           ))}
         </div>
-        <div className="mt-10 flex flex-wrap items-center gap-x-7 gap-y-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-2">
-            <CircleCheck className="size-4 text-emerald-700" aria-hidden />
-            No signup
-          </span>
-          <span className="flex items-center gap-2">
-            <ShieldCheck className="size-4" aria-hidden />
-            Your own demo sandbox
-          </span>
-          <span className="flex items-center gap-2">
-            <FlaskConical className="size-4" aria-hidden />
-            Synthetic data. Demo orders.
-          </span>
+        <div className="mt-8 flex flex-wrap items-start justify-between gap-4 text-xs leading-5 text-muted-foreground">
+          <p>Try a routine basket, then a larger purchase to see the approval flow.</p>
+          <p className="flex items-center gap-2"><FlaskConical className="size-4" aria-hidden /> Synthetic data · Demo orders</p>
         </div>
-        <p className="mt-12 border-t border-border pt-5 text-[11px] leading-5 text-muted-foreground">
-          Try the customer workspace first. Place a routine basket, then try a
-          larger purchase to see the approval flow.
-        </p>
       </main>
     </div>
   );

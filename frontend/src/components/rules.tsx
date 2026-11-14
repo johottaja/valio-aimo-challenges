@@ -312,7 +312,7 @@ export function Rules() {
             />
           </label>
         </div>
-        <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/50 p-4 text-xs leading-6 text-muted-foreground">
+        <div className="flex items-start gap-2 rounded-xl border border-[#d1dde3] bg-[#f2f7f8] p-4 text-xs leading-6 text-muted-foreground">
           <Info className="mt-1 size-4 shrink-0 text-primary" aria-hidden />
           <p>
             Orders above automatic limits need your approval. Saving rules
