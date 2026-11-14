@@ -13,7 +13,7 @@ try:
     client.open(args.url.rstrip("/") + "/api/v1/session")
     checks = json.load(client.open(args.url.rstrip("/") + "/api/v1/readiness"))
     print(json.dumps(checks, indent=2))
-    ready = checks.get("catalog") and checks.get("preset_ready") and checks.get("gemini") and checks.get("mode") == "live"
+    ready = checks.get("catalog") and checks.get("catalog_samples_ready") and checks.get("gemini") and checks.get("mode") == "live"
     print("Live demo ready." if ready else "Live demo not yet ready. Resolve the checks above; simulated/replay mode is not live readiness.")
     sys.exit(0 if ready else 1)
 except Exception as exc:

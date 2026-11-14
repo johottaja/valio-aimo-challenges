@@ -7,179 +7,29 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
-  ChevronDown,
-  CircleCheck,
   Info,
   LoaderCircle,
   MapPin,
-  Plus,
   ShieldCheck,
-  ShoppingBasket,
-  SlidersHorizontal,
   Sparkles,
-  Trash2,
 } from "lucide-react";
 import {
   api,
   post,
-  type BasketLine,
   type Policy,
   type Purchase,
   type PurchaseInput,
   type Session,
 } from "@/lib/api";
-import { cn, money, number } from "@/lib/utils";
+import { money, number } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { ErrorNotice } from "./gateway";
-
-const examples = {
-  routine: {
-    label: "Routine purchase",
-    text: "Order 500 L of lactose-free milk and 10 kg of rolled oats for our kitchen.",
-    amount: "500 L milk + 10 kg oats",
-    note: "See an order placed within your rules.",
-    number: "01",
-  },
-  approval: {
-    label: "Purchase requiring approval",
-    text: "Order 1,500 L of lactose-free milk and 10 kg of rolled oats for our kitchen.",
-    amount: "1,500 L milk + 10 kg oats",
-    note: "See customer approval in action.",
-    number: "02",
-  },
-};
-
-export function BasketEditor({
-  items,
-  onChange,
-}: {
-  items: BasketLine[];
-  onChange: (items: BasketLine[]) => void;
-}) {
-  const update = (index: number, patch: Partial<BasketLine>) =>
-    onChange(
-      items.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-    );
-  return (
-    <div className="space-y-4">
-      {items.map((item, i) => (
-        <div
-          key={i}
-          className="rounded-lg border border-border bg-background p-4"
-        >
-          <div className="grid grid-cols-[1fr_90px_70px_32px] items-end gap-2 max-sm:grid-cols-[1fr_72px_32px]">
-            <label className="max-sm:col-span-3">
-              <span>Product need {i + 1}</span>
-              <input
-                className="w-full"
-                aria-label={`Product need ${i + 1}`}
-                value={item.description}
-                onChange={(e) => update(i, { description: e.target.value })}
-                placeholder="e.g. lactose-free milk"
-                maxLength={200}
-                required
-              />
-            </label>
-            <label>
-              <span>Quantity</span>
-              <input
-                aria-label={`Quantity ${i + 1}`}
-                className="w-full"
-                type="number"
-                min="0.0001"
-                max="1000000"
-                step="0.0001"
-                value={item.quantity}
-                onChange={(e) => update(i, { quantity: e.target.value })}
-                required
-              />
-            </label>
-            <label>
-              <span>Unit</span>
-              <select
-                aria-label={`Unit ${i + 1}`}
-                className="w-full"
-                value={item.unit}
-                onChange={(e) =>
-                  update(i, { unit: e.target.value as BasketLine["unit"] })
-                }
-              >
-                <option>L</option>
-                <option>kg</option>
-                <option>pcs</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              aria-label={`Remove product need ${i + 1}`}
-              className="flex min-h-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-red-50 hover:text-red-700"
-              onClick={() => onChange(items.filter((_, index) => i !== index))}
-            >
-              <Trash2 className="size-4" aria-hidden />
-            </button>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-4">
-            {(["lactose_free", "gluten_free", "vegan"] as const).map((attr) => (
-              <label
-                key={attr}
-                className="flex min-h-8 items-center gap-2 !text-xs !font-normal"
-              >
-                <input
-                  type="checkbox"
-                  checked={item.requirements?.includes(attr) || false}
-                  onChange={(e) =>
-                    update(i, {
-                      requirements: e.target.checked
-                        ? [...(item.requirements || []), attr]
-                        : item.requirements?.filter((a) => a !== attr),
-                    })
-                  }
-                />
-                {attr.replaceAll("_", "-")}
-              </label>
-            ))}
-          </div>
-        </div>
-      ))}
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        disabled={items.length >= 10}
-        onClick={() =>
-          onChange([
-            ...items,
-            { description: "", quantity: 1, unit: "kg", requirements: [] },
-          ])
-        }
-      >
-        <Plus />
-        Add product need
-      </Button>
-      <p className="text-[11px] leading-5 text-muted-foreground">
-        Up to 10 product needs. The whole basket must be eligible before
-        anything is ordered.
-      </p>
-    </div>
-  );
-}
 
 export function PurchaseForm({ session }: { session: Session }) {
   const router = useRouter(),
     client = useQueryClient();
   const [text, setText] = useState("");
-  const [preset, setPreset] = useState<"routine" | "approval" | undefined>();
   const [date, setDate] = useState(session.next_monday);
-  const [structured, setStructured] = useState(false);
-  const [items, setItems] = useState<BasketLine[]>([
-    {
-      description: "lactose-free milk",
-      quantity: 500,
-      unit: "L",
-      requirements: ["lactose_free"],
-    },
-    { description: "rolled oats", quantity: 10, unit: "kg", requirements: [] },
-  ]);
   const [location, setLocation] = useState(session.location);
   const submission = useRef<{ body: string; key: string } | null>(null);
   const policy = useQuery({
@@ -207,11 +57,6 @@ export function PurchaseForm({ session }: { session: Session }) {
       router.push(`/customer/requests/${request.id}`);
     },
   });
-  const choose = (type: "routine" | "approval") => {
-    setText(examples[type].text);
-    setPreset(type);
-    setStructured(false);
-  };
   const quantity = policy.data?.quantity_rules.find((r) => r.group === "milk");
   return (
     <>
@@ -246,54 +91,12 @@ export function PurchaseForm({ session }: { session: Session }) {
       )}
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_260px]">
         <div>
-          <div
-            className="mb-4 grid gap-3 sm:grid-cols-2"
-            aria-label="Demo scenarios"
-          >
-            {Object.entries(examples).map(([key, example]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => choose(key as "routine" | "approval")}
-                aria-pressed={preset === key}
-                className={cn(
-                  "panel flex items-start gap-3 p-4 text-left transition-colors hover:border-primary",
-                  preset === key && "!border-primary bg-blue-50/40",
-                )}
-              >
-                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium">
-                  {example.number}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-semibold">
-                    {example.label}
-                  </span>
-                  <span className="mt-1 block text-[10px] leading-5 text-muted-foreground">
-                    {example.amount}
-                  </span>
-                </span>
-                {preset === key ? (
-                  <CircleCheck
-                    className="mt-1 size-4 shrink-0 text-primary"
-                    aria-hidden
-                  />
-                ) : (
-                  <ArrowRight
-                    className="mt-1 size-4 shrink-0 text-muted-foreground"
-                    aria-hidden
-                  />
-                )}
-              </button>
-            ))}
-          </div>
           <form
             className="panel overflow-hidden"
             onSubmit={(e) => {
               e.preventDefault();
               mutation.mutate({
                 text,
-                preset: structured ? undefined : preset,
-                items: structured ? items : [],
                 needed_by: date,
                 location,
               });
@@ -308,39 +111,22 @@ export function PurchaseForm({ session }: { session: Session }) {
                   >
                     Your request
                   </label>
-                  <button
-                    type="button"
-                    className="min-h-8 text-[11px] font-medium text-primary hover:underline"
-                    onClick={() => setStructured(!structured)}
-                  >
-                    {structured
-                      ? "Use a written request"
-                      : "Enter basket lines"}
-                  </button>
                 </div>
-                {structured ? (
-                  <div className="mt-3">
-                    <BasketEditor items={items} onChange={setItems} />
-                  </div>
-                ) : (
                   <textarea
                     id="purchase-request"
                     className="mt-2 min-h-[104px] w-full !rounded-xl !border-border !bg-background/40 !p-4 !text-[15px] leading-7"
                     value={text}
                     onChange={(e) => {
                       setText(e.target.value);
-                      setPreset(undefined);
                     }}
                     placeholder="e.g. Order 500 L of lactose-free milk and 10 kg of rolled oats…"
                     maxLength={3000}
                     required
                   />
-                )}
-                {!structured && !session.gemini_ready && (
+                {!session.gemini_ready && (
                   <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-5 text-muted-foreground">
                     <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                    Choose an example or enter basket lines. Custom written
-                    requests need a connected AI.
+                    The purchasing AI is not connected. Configure GEMINI_API_KEY on the server to submit requests.
                   </p>
                 )}
               </div>
@@ -396,8 +182,7 @@ export function PurchaseForm({ session }: { session: Session }) {
                 type="submit"
                 disabled={
                   mutation.isPending ||
-                  (!structured && !text.trim()) ||
-                  (structured && !items.length)
+                  !text.trim() || !session.gemini_ready
                 }
               >
                 {mutation.isPending ? (

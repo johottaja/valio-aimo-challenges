@@ -12,7 +12,7 @@ Caddy sends `/api/*` to Python and all other paths to Next.js. The Next.js rewri
 
 Requests progress through received, interpreting, matching, policy checking, and either automatic commitment, customer approval or an explicit blocked/failed state. One request holds up to ten product needs. Each need has typed quantity, canonical unit and optional supported dietary requirements.
 
-The purchasing agent parses custom text with Gemini structured output. Presets bypass model inference and are labeled Preset mode. The matching agent validates semantic candidate relevance for Gemini requests, then deterministic code enforces evidence and ranks valid offers by total, historical reliability at equal prices, and product ID. Calls are bounded by candidate limits and a workflow deadline; no unbounded agent loop is used.
+The purchasing agent parses custom text with Gemini structured output. The matching agent validates semantic candidate relevance for Gemini requests, then deterministic code enforces evidence and ranks valid offers by total, historical reliability at equal prices, and product ID. Calls use bounded catalog candidate sets without an application AI deadline; no unbounded agent loop is used.
 
 The catalog index joins products to reliability and carbon by product ID. It searches multilingual names. Only explicit dietary claims count. Conversion uses the catalog sales/base-unit hierarchy with base-package volume or net weight; it never infers volume from weight, gross weight or a product title. Whole physical packages and upstream lot sizes are respected. Excess caused by rounding requires the user to revise the quantity. Variable-weight products and unpriced deposit products are blocked.
 
@@ -34,7 +34,7 @@ The authoritative contract is `/api/openapi.json`; interactive documentation is 
 - `POST /api/v1/session/role`: select the demo Customer or Aimo identity.
 - `POST /api/v1/session/reset`: clear the caller's demo sandbox.
 - `GET/PUT /api/v1/policy`: retrieve or update versioned rules; only Customer can write.
-- `POST /api/v1/requests`: submit typed/preset/text input with `Idempotency-Key`.
+- `POST /api/v1/requests`: submit request input with `Idempotency-Key`.
 - `GET /api/v1/requests` and `GET /api/v1/requests/{id}`: retrieve own requests.
 - `GET /api/v1/requests/{id}/events`: structured audit records, never hidden model reasoning.
 - `POST /api/v1/requests/{id}/retry` and `/clarify`: restart failed/expired/unresolved work.
@@ -42,7 +42,7 @@ The authoritative contract is `/api/openapi.json`; interactive documentation is 
 - `GET /api/v1/approvals/{id}` and `POST .../decision`: Customer-only review and approve/reject, bound to fingerprint.
 - `GET /api/v1/orders` and `GET /api/v1/orders/{id}`: own ledger receipts.
 - `GET /api/health`: process/database health.
-- `GET /api/v1/readiness`: authenticated catalog/configuration and live preset check.
+- `GET /api/v1/readiness`: authenticated catalog/configuration and live sample catalog check.
 
 Errors contain a stable code, user-readable message, optional field path and retryability. The live provider never returns fixture responses. The event API key and Gemini key are server-only settings and are excluded from audit evidence.
 
@@ -52,4 +52,4 @@ Use `uv sync --frozen` and `npm ci` for reproducible installs. Alembic runs befo
 
 Do not copy SQLite's main file while it is writing; use SQLite's backup API or a consistent volume snapshot including WAL state. Preserve the named volume when replacing containers. Check `/api/health`, container restart state and structured request errors. This version has no external telemetry, email, webhook, scheduled job or real fulfillment integration.
 
-Local UI verification can use fixture mode with actual challenge catalog data. Before claiming a live demo, configure both keys, run preflight and rehearse an actual model-driven request plus both presets. Network outages must produce an explicit error or an intentionally selected, labeled recording mode.
+Local UI verification can use fixture mode with actual challenge catalog data. Before claiming a live demo, configure both keys, run preflight and rehearse an actual model-driven request including ambiguous product choices and large quantities. Network outages must produce an explicit error or an intentionally selected, labeled recording mode.

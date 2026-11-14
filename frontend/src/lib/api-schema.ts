@@ -159,6 +159,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requests/{request_id}/choose-product": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Choose Product */
+        post: operations["choose_product_api_v1_requests__request_id__choose_product_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requests/{request_id}/select": {
         parameters: {
             query?: never;
@@ -376,6 +393,15 @@ export interface components {
              */
             charges_note: string;
         };
+        /** ChoiceSelection */
+        ChoiceSelection: {
+            /** Revision */
+            revision: number;
+            /** Line Index */
+            line_index: number;
+            /** Choice Index */
+            choice_index: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -509,6 +535,13 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** ProductChoice */
+        ProductChoice: {
+            /** Label */
+            label: string;
+            /** Product Ids */
+            product_ids: string[];
+        };
         /** PurchaseRequest */
         "PurchaseRequest-Input": {
             /**
@@ -516,8 +549,6 @@ export interface components {
              * @default
              */
             text: string;
-            /** Preset */
-            preset?: ("routine" | "approval") | null;
             /** Items */
             items?: components["schemas"]["BasketLine-Input"][];
             /**
@@ -538,8 +569,6 @@ export interface components {
              * @default
              */
             text: string;
-            /** Preset */
-            preset?: ("routine" | "approval") | null;
             /** Items */
             items?: components["schemas"]["BasketLine-Output"][];
             /**
@@ -595,8 +624,14 @@ export interface components {
             items: components["schemas"]["BasketLine-Output"][];
             /** Alternatives */
             alternatives: components["schemas"]["Offer"][][];
-            /** Clarification Choices */
-            clarification_choices?: string[][];
+            /** Product Choices */
+            product_choices?: components["schemas"]["ProductChoice"][];
+            /** Choice Line Index */
+            choice_line_index?: number | null;
+            /** Chosen Product Ids */
+            chosen_product_ids?: {
+                [key: string]: string[];
+            };
             preview: components["schemas"]["BasketPreview"] | null;
             decision: components["schemas"]["PolicyDecision"] | null;
             receipt: components["schemas"]["OrderReceipt"] | null;
@@ -954,6 +989,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PurchaseRequest-Input"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    choose_product_api_v1_requests__request_id__choose_product_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChoiceSelection"];
             };
         };
         responses: {

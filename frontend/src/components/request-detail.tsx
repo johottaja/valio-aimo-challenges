@@ -24,7 +24,6 @@ import {
 import {
   api,
   post,
-  type BasketLine,
   type Offer,
   type Purchase,
   type Session,
@@ -39,7 +38,6 @@ import {
   ReceiptView,
   StatusBadge,
 } from "./gateway";
-import { BasketEditor } from "./purchase-form";
 
 const active = [
   "received",
@@ -104,15 +102,22 @@ export function RequestDetail({
     onSuccess: setRequest,
   });
   const [editing, setEditing] = useState(false);
-  const [editedItems, setEditedItems] = useState<BasketLine[]>([]);
+  const [editedText, setEditedText] = useState("");
   const [editedDate, setEditedDate] = useState("");
+  const chooseProduct = useMutation({
+    mutationFn: (choiceIndex: number) => post<Purchase>(`/requests/${id}/choose-product`, {
+      revision: query.data!.revision,
+      line_index: query.data!.choice_line_index,
+      choice_index: choiceIndex,
+    }),
+    onSuccess: setRequest,
+  });
   const clarify = useMutation({
-    mutationFn: (update?: { items: BasketLine[]; date: string }) =>
+    mutationFn: () =>
       post<Purchase>(`/requests/${id}/clarify`, {
-        text: query.data!.input.text,
-        needed_by: update?.date ?? editedDate,
+        text: editedText,
+        needed_by: editedDate,
         location: query.data!.input.location,
-        items: update?.items ?? editedItems,
       }),
     onSuccess: (data) => {
       setRequest(data);
@@ -130,7 +135,7 @@ export function RequestDetail({
   );
   const base = aimo ? "/aimo" : "/customer";
   const beginEditing = () => {
-    setEditedItems(request.items.map((i) => ({ ...i })));
+    setEditedText(request.input.text || request.items.map((i) => `${i.quantity} ${i.unit} of ${i.description}`).join(" and "));
     setEditedDate(request.input.needed_by ?? "");
     setEditing(true);
   };
@@ -191,7 +196,7 @@ export function RequestDetail({
           )}
           <ErrorNotice
             error={
-              decide.error || retry.error || selectOffer.error || clarify.error
+              decide.error || retry.error || selectOffer.error || clarify.error || chooseProduct.error
             }
           />
           <div aria-live="polite" aria-atomic="true" className="sr-only">
@@ -239,7 +244,7 @@ export function RequestDetail({
                   <p className="mt-1 text-xs text-amber-900">
                     No partial order has been placed.
                   </p>
-                  {request.clarification_choices?.some((choices) => choices.length > 0) && !aimo && <p className="mt-2 text-xs text-amber-900">Choose an option below to search again. Your quantity and requirements will stay the same.</p>}
+                  {!!request.product_choices?.length && !aimo && <p className="mt-2 text-xs text-amber-900">Choose the product type below. Your quantity and requirements stay the same.</p>}
                   {!aimo && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Button
@@ -259,7 +264,7 @@ export function RequestDetail({
                         size="sm"
                         onClick={beginEditing}
                       >
-                        Edit basket and delivery date
+                        Update request
                       </Button>
                     </div>
                   )}
@@ -294,9 +299,9 @@ export function RequestDetail({
               }}
             >
               <h2 className="mb-5 text-base font-semibold">
-                Clarify your basket
+                Update your request
               </h2>
-              <BasketEditor items={editedItems} onChange={setEditedItems} />
+              <label className="block text-xs font-medium">Your request<textarea className="mt-2 min-h-28 w-full" value={editedText} onChange={(e) => setEditedText(e.target.value)} required maxLength={3000} /></label>
               <label className="mt-5 block text-xs font-medium">
                 Delivery date
                 <input className="mt-2 block w-full !text-xs" type="date" value={editedDate} min={new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Helsinki" }).format(new Date())} onChange={(e) => setEditedDate(e.target.value)} required />
@@ -305,7 +310,7 @@ export function RequestDetail({
               <div className="mt-5 flex gap-2">
                 <Button
                   type="submit"
-                  disabled={clarify.isPending || !editedItems.length}
+                  disabled={clarify.isPending || !editedText.trim()}
                 >
                   {clarify.isPending
                     ? "Rechecking…"
@@ -365,7 +370,7 @@ export function RequestDetail({
                     ))
                   ) : (
                     <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">
-                      {request.input.text || "Reading the preset basket…"}
+                      {request.input.text || "Reading your request…"}
                     </p>
                   )}
                   {active.includes(request.status) && (
@@ -379,24 +384,28 @@ export function RequestDetail({
                   )}
                 </div>
               )}
-              {!preview &&
+              {!aimo && request.status === "needs_information" && !!request.product_choices?.length && (
+                <div className="panel p-6">
+                  <h2 className="mb-4 text-sm font-semibold">Which kind of {request.items[request.choice_line_index ?? 0]?.description} would you like?</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {request.product_choices.map((choice, index) => (
+                      <Button key={index} variant="secondary" disabled={chooseProduct.isPending} onClick={() => chooseProduct.mutate(index)}>{choice.label}<ArrowRight /></Button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">We’ll check the catalog products in your selection. If the basket meets your rules, it may be ordered automatically.</p>
+                </div>
+              )}
+              {!preview && !request.product_choices?.length &&
                 request.alternatives.map((options, index) => !aimo && options.some((offer) => offer.eligible) ? null : (
                   <div className="panel p-6" key={index}>
                     <h2 className="mb-4 text-sm font-semibold">
-                      {aimo ? `Options for ${request.items[index]?.description}` : `What kind of ${request.items[index]?.description} would you like?`}
+                      {aimo ? `Options for ${request.items[index]?.description}` : `Choose what to do for ${request.items[index]?.description}`}
                     </h2>
                     {!aimo ? (
                       <>
-                        {(request.clarification_choices?.[index] ?? []).length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {request.clarification_choices![index].map((choice) => (
-                              <Button key={choice} variant="secondary" disabled={clarify.isPending} onClick={() => clarify.mutate({items: request.items.map((item, i) => i === index ? { ...item, description: choice } : item), date: request.input.needed_by ?? ""})}>
-                                {choice}<ArrowRight />
-                              </Button>
-                            ))}
-                          </div>
-                        ) : <p className="text-sm text-muted-foreground">Enter a more specific product to search again.</p>}
-                        <Button className="mt-3" variant="ghost" size="sm" onClick={beginEditing}>Enter a different product</Button>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button variant="secondary" size="sm" onClick={beginEditing}>Update request</Button>
+                        </div>
                         <p className="mt-3 text-xs text-muted-foreground">Choosing an option rechecks the basket and may place an order automatically if it meets your rules.</p>
                       </>
                     ) : <>

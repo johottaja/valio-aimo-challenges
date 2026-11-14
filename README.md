@@ -25,15 +25,13 @@ Open [the local demo](http://127.0.0.1:3000). Both workspaces share the visitor'
 
 Set `AIMO_API_KEY` and `GEMINI_API_KEY` in `.env` to connect the live services. Keys stay on the Python server. `GEMINI_MODEL` defaults to `gemini-3.8-flash`.
 
-For a demo before keys are available, explicitly set `AIMO_MODE=fixture` in `.env`. It uses the imported challenge products with **invented prices and stock**, labeled throughout the interface. Presets and structured basket lines work without Gemini. Custom written requests require Gemini. Live mode never silently falls back to simulated responses.
+For a demo before keys are available, explicitly set `AIMO_MODE=fixture` in `.env`. It uses the imported challenge products with **invented prices and stock**, labeled throughout the interface. Purchasing requests require Gemini. Customers enter requests in plain language; ambiguous products prompt catalog-backed choices. Live mode never silently falls back to simulated responses.
 
-## Demo in two minutes
+## Try a purchase
 
-1. Enter **Customer workspace** and select **Routine purchase**. Click **Ask purchasing agent**. A 500 L milk + 10 kg oats basket is ordered automatically when evidence and limits allow it.
-2. Use **Start fresh demo** before the second scenario so previous orders do not affect the per-delivery limits.
-3. Select **Purchase requiring approval** and submit. The complete 1,500 L milk + 10 kg oats basket pauses at the 1,000 L milk threshold.
-4. Click **Review and approve**. Inspect the exact basket and reason, then **Approve and place order** or reject it. The receipt is shown only after revalidation and a ledger commit.
-5. Switch to **Aimo workspace**, open the request, and inspect the execution timeline. Aimo operators have no customer approval button.
+Enter Customer workspace and write a request such as “Order 900 L of milk and 10 kg of oats.” The agent parses the basket and asks you to choose a product type when catalog matches are ambiguous. Every choice binds to actual catalog product IDs. Prices, stock, delivery and customer rules are then checked. Eligible baskets within automatic limits are ordered; baskets above the customer's limits require approval. Unavailable quantities and missing supplier evidence are reported without placing a partial order.
+
+Quantities have no application-imposed maximum. Customer rules govern automatic authorization, while supplier stock and evidence govern fulfillment. Requests must use positive finite quantities and supported units. To revise a request, update its written text; there is no manual basket-line editor or preset scenario selector.
 
 The Rules page changes automatic limits, required attributes and the delivery location. Related orders for the same delivery count toward limits, including concurrently submitted requests. Changing rules invalidates pending previews. The initial milk/oat aliases correspond to reviewed challenge category codes; arbitrary category codes are supported through the API.
 
@@ -49,7 +47,7 @@ Open [the Docker demo](http://localhost:8080). Three containers run Next.js, Fas
 
 For a domain, set `SITE_ADDRESS=demo.example.com`, `HTTP_PORT=80`, `HTTPS_PORT=443`, `COOKIE_SECURE=true`, and point DNS to the server. Open ports 80 and 443. Caddy obtains and renews HTTPS certificates. Apply updates with `docker compose up --build -d` and check `docker compose logs --tail=100 api web`.
 
-Before an event, run `python3 scripts/preflight.py --url https://demo.example.com`. It checks catalog import, upstream access and preset availability. **Live readiness also requires Gemini configuration.** A successful rehearsal with the supplied keys is still required; the preflight checks configured credentials and eligible live data, not the quality of a model response.
+Before an event, run `python3 scripts/preflight.py --url https://demo.example.com`. It checks catalog import, upstream access and sample catalog availability. **Live readiness also requires Gemini configuration.** A successful rehearsal with the supplied keys is still required; the preflight checks configured credentials and eligible live data, not the quality of a model response.
 
 ## Verify
 
@@ -67,7 +65,7 @@ API reference: [local OpenAPI documentation](http://127.0.0.1:8000/api/docs). Ge
 
 ## Record a rehearsal fallback
 
-With the live challenge key configured, run `backend/.venv/bin/python scripts/record-challenge.py` from the repository root. This records only the eight preset candidates for the next Monday. Set `AIMO_MODE=replay` and restart to use it explicitly. The UI labels recorded responses, checks their date/expiry, and refuses requests absent from the recording. Recordings are ignored by Git.
+With the live challenge key configured, run `backend/.venv/bin/python scripts/record-challenge.py` from the repository root. This records only the eight recorded catalog candidates for the next Monday. Set `AIMO_MODE=replay` and restart to use it explicitly. The UI labels recorded responses, checks their date/expiry, and refuses requests absent from the recording. Recordings are ignored by Git.
 
 ## Prototype boundaries
 

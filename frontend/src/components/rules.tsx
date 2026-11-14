@@ -82,7 +82,6 @@ export function Rules() {
               className="w-full"
               type="number"
               min="0.01"
-              max="1000000"
               step="0.01"
               value={draft.spend_limit}
               onChange={(e) => edit({ spend_limit: e.target.value })}
@@ -127,8 +126,7 @@ export function Rules() {
                       className="w-full"
                       type="number"
                       min="0.001"
-                      max="1000000"
-                      step="0.001"
+                              step="0.001"
                       required
                       value={rule.limit}
                       onChange={(e) =>

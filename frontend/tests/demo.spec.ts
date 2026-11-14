@@ -8,12 +8,26 @@ async function customer(page: Page) {
   ).toBeVisible();
 }
 
+// Seed real API requests for deterministic policy/receipt UI checks without
+// depending on a live model response. The purchase form itself is checked below.
+async function submitBasket(page: Page, amount: number) {
+  const response = await page.request.post("/api/v1/requests", {
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+    data: { items: [
+      { description: "lactose-free milk", quantity: amount, unit: "L", requirements: ["lactose_free"] },
+      { description: "rolled oats", quantity: 10, unit: "kg" },
+    ] },
+  });
+  expect(response.status()).toBe(202);
+  const request = await response.json();
+  await page.goto(`/customer/requests/${request.id}`);
+}
+
 test("routine basket is ordered automatically and has a receipt", async ({
   page,
 }) => {
   await customer(page);
-  await page.getByRole("button", { name: /01 Routine purchase/ }).click();
-  await page.getByRole("button", { name: "Ask purchasing agent" }).click();
+  await submitBasket(page, 500);
   await expect(
     page.getByRole("heading", { name: "Demo order placed." }),
   ).toBeVisible();
@@ -26,10 +40,7 @@ test("large basket pauses, shows alternatives, and only orders after approval", 
   page,
 }) => {
   await customer(page);
-  await page
-    .getByRole("button", { name: /02 Purchase requiring approval/ })
-    .click();
-  await page.getByRole("button", { name: "Ask purchasing agent" }).click();
+  await submitBasket(page, 1500);
   await expect(
     page.getByRole("heading", { name: "This basket needs your approval." }),
   ).toBeVisible();
@@ -57,10 +68,7 @@ test("large basket pauses, shows alternatives, and only orders after approval", 
 
 test("customer can reject without creating an order", async ({ page }) => {
   await customer(page);
-  await page
-    .getByRole("button", { name: /02 Purchase requiring approval/ })
-    .click();
-  await page.getByRole("button", { name: "Ask purchasing agent" }).click();
+  await submitBasket(page, 1500);
   await page.getByRole("link", { name: "Review and approve" }).click();
   await page
     .getByRole("button", { name: "Reject basket", exact: true })
@@ -89,8 +97,7 @@ test("rules are editable and Aimo can inspect but not approve", async ({
   await page.getByRole("button", { name: "Save purchasing rules" }).click();
   await expect(page.getByText("Rules saved", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Purchase", exact: true }).click();
-  await page.getByRole("button", { name: /01 Routine purchase/ }).click();
-  await page.getByRole("button", { name: "Ask purchasing agent" }).click();
+  await submitBasket(page, 500);
   await expect(
     page.getByRole("heading", { name: "This basket needs your approval." }),
   ).toBeVisible();
@@ -105,18 +112,12 @@ test("rules are editable and Aimo can inspect but not approve", async ({
   ).toHaveCount(0);
 });
 
-test("structured clarification is usable without Gemini and layout fits", async ({
-  page,
-}) => {
+test("purchasing uses a written request without presets or manual lines", async ({ page }) => {
   await customer(page);
-  await page.getByRole("button", { name: "Enter basket lines" }).click();
-  await page.getByLabel("Quantity 1", { exact: true }).fill("10");
-  await page.getByRole("button", { name: "Ask purchasing agent" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Demo order placed." }),
-  ).toBeVisible();
-  const fits = await page.evaluate(
-    () => document.documentElement.scrollWidth <= window.innerWidth,
-  );
-  expect(fits).toBe(true);
+  await expect(page.getByLabel("Your request", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enter basket lines" })).toHaveCount(0);
+  await expect(page.getByLabel("Demo scenarios")).toHaveCount(0);
+  await page.getByLabel("Your request", { exact: true }).fill("Order 900 L of milk and 99999999kg of oats");
+  await expect(page.getByLabel("Your request", { exact: true })).toHaveValue("Order 900 L of milk and 99999999kg of oats");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
