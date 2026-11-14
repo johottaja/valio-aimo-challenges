@@ -1,0 +1,60 @@
+services:
+  api:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: sqlite:////var/lib/aimo/aimo.db
+      CATALOG_PATH: /catalog/catalog.db
+      REPLAY_PATH: /catalog/replay.json
+      AIMO_MODE: ${AIMO_MODE:-live}
+      AIMO_API_KEY: ${AIMO_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    volumes:
+      - aimo_data:/var/lib/aimo
+      - ./data:/catalog:ro
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  web:
+    build:
+      context: ./frontend
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost}
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  aimo_data:
+  caddy_data:
+  caddy_config:

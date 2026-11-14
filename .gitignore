@@ -5,3 +5,17 @@
 *.key
 node_modules/
 .DS_Store
+.venv/
+.cache/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.db
+*.db-*
+data/*
+!data/.gitkeep
+.next/
+playwright-report/
+test-results/
+frontend/src/lib/openapi.json
+*.tsbuildinfo
