@@ -32,10 +32,14 @@ def build_offer(product: dict, line: BasketLine, price: dict, stock: dict, sourc
             if quantity * factor != line.quantity:
                 reasons.append(f"Pack rounding would deliver {quantity * factor:g} {line.unit}; confirm a revised quantity.")
     else:
-        reasons.append(f"No reliable catalog conversion to {line.unit}.")
+        pack = next((u for u in product.get("units", []) if u.get("unitId") == product["salesUnit"]), None)
+        if product["baseUnit"] == "ST" and pack and dec(pack.get("sizeInBaseUnits", 0)) > 1:
+            reasons.append(f"The catalog cannot verify {line.unit} per sales pack ({dec(pack['sizeInBaseUnits']):g} items). The volume or net weight per item is missing.")
+        else:
+            reasons.append(f"The catalog does not provide a verified sales-unit conversion to {line.unit}.")
     required = set(line.requirements)
     for rule in policy.attribute_rules:
-        if group_matches(rule.group, product):
+        if group_matches(rule.group, product, rule.category_codes):
             required.add(rule.attribute)
     for attribute in required:
         if attribute not in evidence:

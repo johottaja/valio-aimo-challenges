@@ -7,9 +7,14 @@ import sqlite3
 from contextlib import contextmanager
 from decimal import Decimal
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .schemas import Policy
 
 CLAIMS = {"FREE_FROM_LACTOSE": "lactose_free", "FREE_FROM_GLUTEN": "gluten_free", "VEGAN": "vegan"}
-# Reviewed demo aliases; original category codes remain the authority for grouping.
+# Legacy aliases for existing policies. Compiled language rules use explicit
+# category_codes resolved from the complete catalog.
 GROUPS = {"milk": ["10400"], "oats": ["21370"]}
 DEMO_IDS = {"milk": ["464201", "464398", "463335", "464440"], "oats": ["461179", "460200", "463088", "461577"]}
 
@@ -60,9 +65,9 @@ def requirement_evidence(product: dict) -> dict[str, str]:
     return found
 
 
-def group_matches(group: str, product: dict) -> bool:
+def group_matches(group: str, product: dict, category_codes: list[str] | None = None) -> bool:
     group = group.strip().lower()
-    return product["category"] in GROUPS.get(group, [group])
+    return product["category"] in (category_codes or GROUPS.get(group, [group]))
 
 
 class Catalog:
@@ -89,7 +94,34 @@ class Catalog:
             row = conn.execute("SELECT data FROM products WHERE id=?", (product_id,)).fetchone()
         return json.loads(row[0]) if row else None
 
-    def search(self, query: str, limit: int = 16, reviewed: bool = False) -> list[dict]:
+    def categories(self) -> list[dict]:
+        """Real category codes and representative products; no invented taxonomy."""
+        if not self.path.exists():
+            return []
+        with self.connect() as conn:
+            rows = conn.execute("""
+                WITH catalog AS (
+                    SELECT id, json_extract(data, '$.category') AS code,
+                           json_extract(data, '$.name') AS name FROM products
+                ), ranked AS (
+                    SELECT code, name,
+                           count(*) OVER (PARTITION BY code) AS product_count,
+                           row_number() OVER (PARTITION BY code ORDER BY name, id) AS n
+                    FROM catalog WHERE code IS NOT NULL AND code != ''
+                )
+                SELECT code, name, product_count FROM ranked
+                WHERE n = 1 OR n = (product_count + 1) / 2 OR n = product_count
+                ORDER BY code, n
+            """).fetchall()
+        result = {}
+        for row in rows:
+            entry = result.setdefault(row["code"], {"code": row["code"], "product_count": row["product_count"], "examples": []})
+            if row["name"] and row["name"] not in entry["examples"]:
+                entry["examples"].append(row["name"][:200])
+        return list(result.values())
+
+    def search(self, query: str, limit: int = 16, reviewed: bool = False,
+               requirements: list[str] | None = None, policy: "Policy | None" = None) -> list[dict]:
         if not self.count():
             return []
         words = re.findall(r"[\w]+", query.lower())
@@ -102,13 +134,27 @@ class Catalog:
         if not terms:
             return []
         expression = " AND ".join('"' + t + '"*' for t in terms[:8])
+        matching, rejected = [], []
         with self.connect() as conn:
-            rows = conn.execute("SELECT p.data FROM product_search s JOIN products p ON p.id=s.id WHERE product_search MATCH ? ORDER BY bm25(product_search) LIMIT ?", (expression, limit * 3)).fetchall()
-        products = [json.loads(r[0]) for r in rows]
-        # For the reviewed milk alias, don't offer ice cream or milk-free margarine.
-        if kind == "milk":
-            products = [p for p in products if group_matches("milk", p)]
-        return products[:limit]
+            # Apply category and dietary constraints before the candidate cap.
+            # Short milk names otherwise crowd verified lactose-free milk out.
+            rows = conn.execute("SELECT p.data FROM product_search s JOIN products p ON p.id=s.id WHERE product_search MATCH ? ORDER BY bm25(product_search), p.id", (expression,))
+            for row in rows:
+                product = json.loads(row[0])
+                if kind == "milk" and not group_matches("milk", product):
+                    continue
+                required = set(requirements or [])
+                if policy:
+                    required.update(rule.attribute for rule in policy.attribute_rules
+                                    if group_matches(rule.group, product, rule.category_codes))
+                if required.issubset(requirement_evidence(product)):
+                    matching.append(product)
+                    if len(matching) >= limit:
+                        break
+                elif len(rejected) < limit:
+                    rejected.append(product)
+        # Retain real rejected examples for diagnostics when nothing qualifies.
+        return matching or rejected
 
 
 def import_catalog(source: Path, output: Path):

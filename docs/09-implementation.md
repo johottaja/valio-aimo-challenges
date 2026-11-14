@@ -28,6 +28,8 @@ Changing policy expires outstanding previews. Startup recovers orders from persi
 
 ## Endpoints
 
+Purchasing rules are authored in natural language; the spend limit remains numeric. `POST /api/v1/policy/interpret` compiles text into an unsaved, validated `Policy` preview. The model sees all category codes from `catalog.db` with real product examples. Codes absent from the catalog are rejected. Each rule may cover multiple categories, with quantity limits enforced against their combined quantity. Unsupported or ambiguous instructions return a clarification. Customers review the compiled rules before saving through the versioned `PUT /api/v1/policy` endpoint. The original text is retained, but purchasing uses only the compiled quantity rules, attribute rules and location, not a new interpretation of the text. Editing only the numeric budget requires no AI call. `GET /api/v1/catalog/categories` lists the catalog codes, counts and examples used for review.
+
 The authoritative contract is `/api/openapi.json`; interactive documentation is `/api/docs`.
 
 - `GET /api/v1/session`: create or retrieve isolated visitor context.
@@ -47,6 +49,10 @@ The authoritative contract is `/api/openapi.json`; interactive documentation is 
 Errors contain a stable code, user-readable message, optional field path and retryability. The live provider never returns fixture responses. The event API key and Gemini key are server-only settings and are excluded from audit evidence.
 
 ## Operations
+
+Quantity rules preserve their scope: `scope=order` checks only the current basket, while `scope=delivery` includes committed orders and active authority reservations for that delivery. Older rules default to delivery scope. Delivery-limit messages separate the current basket quantity from earlier orders/reservations and the combined total.
+
+The rule review lists only constraints interpreted from the text. The numeric budget remains in its own input, and empty quantity/attribute lists do not produce placeholder rules. Delivery location is shown in the interpretation only when explicitly supplied in the text (`location_is_explicit`); otherwise the current location is preserved as an existing setting.
 
 Use `uv sync --frozen` and `npm ci` for reproducible installs. Alembic runs before the container starts; fresh local databases bootstrap automatically. `data/catalog.db` is imported outside container builds and mounted read-only. Mutable SQLite state is mounted separately in a named volume.
 

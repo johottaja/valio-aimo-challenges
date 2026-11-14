@@ -94,6 +94,15 @@ async def test_missing_one_product_never_places_partial_basket(context):
     assert not (await client.get("/api/v1/orders")).json()
 
 
+async def test_small_quantity_explains_verified_whole_pack_requirement(context):
+    app, client = context
+    state = await submit(app, client, {"items": [{"description": "milk", "quantity": "0.2", "unit": "L"}]})
+    assert state["status"] == "needs_information"
+    assert "requested 0.2 L" in state["message"]
+    assert "whole-pack option would deliver 1 L" in state["message"]
+    assert not (await client.get("/api/v1/orders")).json()
+
+
 async def test_ambiguous_choice_binds_catalog_products_and_preserves_quantity(context, monkeypatch):
     from app.schemas import ProductChoice
     app, client = context
@@ -120,6 +129,29 @@ async def test_unknown_requirement_cannot_be_human_approved(context):
     assert state["status"] == "needs_information"
     assert all(not o["eligible"] for o in state["alternatives"][0])
     assert any("vegan" in r for o in state["alternatives"][0] for r in o["reasons"])
+
+
+async def test_product_choices_only_include_currently_eligible_products(context, monkeypatch):
+    app, client = context
+    original = app.state.workflow.provider.quote
+    offered = []
+
+    async def quote(products, needed_by):
+        prices, stocks, source = await original(products, needed_by)
+        if "464201" in stocks:
+            stocks["464201"]["salesBlock"] = True
+        return prices, stocks, source
+
+    async def choices(line, products):
+        offered.extend(p["id"] for p in products)
+        return []
+
+    monkeypatch.setattr(app.state.workflow.provider, "quote", quote)
+    monkeypatch.setattr(app.state.workflow.matcher, "product_choices", choices)
+    state = await submit(app, client, {"items": [{"description": "milk", "quantity": 10, "unit": "L"}]})
+    assert state["status"] == "committed"
+    assert offered and "464201" not in offered
+    assert state["receipt"]["preview"]["items"][0]["product_id"] != "464201"
 
 
 async def test_split_requests_aggregate_even_when_concurrent(context):

@@ -2,6 +2,7 @@ import type { components } from "./api-schema";
 
 export type Session = components["schemas"]["SessionView"];
 export type Policy = Required<components["schemas"]["Policy-Output"]>;
+export type CatalogCategory = components["schemas"]["CatalogCategory"];
 export type Purchase = components["schemas"]["RequestView"];
 export type Offer = components["schemas"]["Offer"];
 export type Receipt = components["schemas"]["OrderReceipt"];

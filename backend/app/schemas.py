@@ -54,9 +54,11 @@ class ParsedBasket(StrictModel):
 
 
 class QuantityRule(StrictModel):
-    group: str = Field(min_length=1, max_length=80, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9 _-]*$")
+    group: str = Field(min_length=1, max_length=80)
+    category_codes: list[str] = Field(default_factory=list, max_length=1000)
     limit: Decimal = Field(gt=0, allow_inf_nan=False)
     unit: Unit
+    scope: Literal["order", "delivery"] = "delivery"
 
     @field_validator("group")
     @classmethod
@@ -65,7 +67,8 @@ class QuantityRule(StrictModel):
 
 
 class AttributeRule(StrictModel):
-    group: str = Field(min_length=1, max_length=80, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9 _-]*$")
+    group: str = Field(min_length=1, max_length=80)
+    category_codes: list[str] = Field(default_factory=list, max_length=1000)
     attribute: Attribute
 
     @field_validator("group")
@@ -76,6 +79,8 @@ class AttributeRule(StrictModel):
 
 class Policy(StrictModel):
     version: int = Field(default=1, ge=1)
+    rules_text: str = Field(default="", max_length=5000)
+    location_is_explicit: bool = False
     spend_limit: Decimal = Field(default=Decimal("10000"), gt=0, allow_inf_nan=False)
     location: str = Field(default="hotel-helsinki", min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9 _-]*$")
     quantity_rules: list[QuantityRule] = Field(default_factory=lambda: [QuantityRule(group="milk", limit=1000, unit="L")], max_length=10)
@@ -84,10 +89,22 @@ class Policy(StrictModel):
     @field_validator("quantity_rules")
     @classmethod
     def unique_rules(cls, rules):
-        keys = [(r.group.lower(), r.unit) for r in rules]
+        keys = [(r.group.lower(), r.unit, r.scope) for r in rules]
         if len(set(keys)) != len(keys):
-            raise ValueError("Use one quantity limit per product group and unit.")
+            raise ValueError("Use one quantity limit per product group, unit and scope.")
         return rules
+
+
+class PolicyTextInput(StrictModel):
+    text: str = Field(min_length=1, max_length=5000)
+    version: int = Field(ge=1)
+    spend_limit: Decimal = Field(gt=0, allow_inf_nan=False)
+
+
+class CatalogCategory(BaseModel):
+    code: str
+    product_count: int
+    examples: list[str]
 
 
 class Offer(BaseModel):

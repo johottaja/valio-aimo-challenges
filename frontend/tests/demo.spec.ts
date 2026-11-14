@@ -91,9 +91,8 @@ test("rules are editable and Aimo can inspect but not approve", async ({
 }) => {
   await customer(page);
   await page.getByRole("link", { name: "Rules", exact: true }).click();
-  await page
-    .getByLabel("Automatic quantity limit 1", { exact: true })
-    .fill("400");
+  await page.getByLabel("Spend limit per delivery", { exact: true }).fill("1");
+  await page.getByRole("button", { name: "Review rules" }).click();
   await page.getByRole("button", { name: "Save purchasing rules" }).click();
   await expect(page.getByText("Rules saved", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Purchase", exact: true }).click();

@@ -10,8 +10,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import delete, select
 
 from .config import Settings, get_settings
+from .agents import AgentError, interpret_policy
 from .db import Database, Order, Purchase, Reservation, Sandbox, new_sandbox
-from .schemas import ApprovalDecision, ApiIssue, ChoiceSelection, OfferSelection, OrderReceipt, Policy, PurchaseRequest, RequestView, RoleSelection, SessionView, next_monday, now
+from .schemas import ApprovalDecision, ApiIssue, CatalogCategory, ChoiceSelection, OfferSelection, OrderReceipt, Policy, PolicyTextInput, PurchaseRequest, RequestView, RoleSelection, SessionView, next_monday, now
 from .workflow import Workflow, WorkflowError, add_event
 
 
@@ -116,6 +117,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.put("/api/v1/policy", response_model=Policy)
     def update_policy(policy: Policy, sandbox: Annotated[Sandbox, Depends(customer)]):
+        codes = {code for rule in [*policy.quantity_rules, *policy.attribute_rules] for code in rule.category_codes}
+        if codes and not codes.issubset({c["code"] for c in workflow.catalog.categories()}):
+            raise WorkflowError("invalid_policy_categories", "Rules must refer to categories present in the product catalog.", 422)
         with database.write() as db:
             current = db.get(Sandbox, sandbox.id)
             previous = Policy.model_validate_json(current.policy)
@@ -131,6 +135,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     workflow.save(db, row, state)
             db.execute(delete(Reservation).where(Reservation.sandbox_id == sandbox.id))
         return policy
+
+    @app.get("/api/v1/catalog/categories", response_model=list[CatalogCategory])
+    def catalog_categories(sandbox: Annotated[Sandbox, Depends(session)]):
+        return workflow.catalog.categories()
+
+    @app.post("/api/v1/policy/interpret", response_model=Policy)
+    async def interpret_rules(payload: PolicyTextInput, sandbox: Annotated[Sandbox, Depends(customer)]):
+        current = workflow.policy(sandbox.id)
+        if payload.version != current.version:
+            raise WorkflowError("policy_conflict", "These rules were edited elsewhere. Reload before reviewing.")
+        try:
+            return await interpret_policy(settings, payload, current, workflow.catalog.categories())
+        except AgentError as exc:
+            raise WorkflowError("policy_interpretation_failed", str(exc), 422) from exc
 
     @app.post("/api/v1/requests", response_model=RequestView, status_code=202)
     async def submit(payload: PurchaseRequest, sandbox: Annotated[Sandbox, Depends(customer)], idempotency_key: Annotated[str, Header(min_length=8, max_length=128)]):

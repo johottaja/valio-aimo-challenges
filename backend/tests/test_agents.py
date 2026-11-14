@@ -60,6 +60,23 @@ async def test_matching_validation_diagnostics_do_not_log_response(settings, mon
     assert settings.gemini_api_key not in caplog.text
 
 
+async def test_product_matching_does_not_turn_total_amount_into_pack_preference(settings, monkeypatch):
+    import json
+
+    class PackClient(FakeClient):
+        async def generate_content(self, **kwargs):
+            need = json.loads(kwargs["contents"])["need"]
+            assert "quantity" not in need and "unit" not in need
+            assert need["description"] == "whipping cream"
+            return await super().generate_content(**kwargs)
+
+    settings.gemini_api_key = "test-key-not-a-real-secret"
+    monkeypatch.setattr("app.agents.genai.Client", lambda **kw: PackClient('{"product_ids":["small","large"],"reason":"Both are whipping cream."}'))
+    products = [{"id": "small", "name": "Whipping cream 2 dl"}, {"id": "large", "name": "Whipping cream 1 L"}]
+    selected, _ = await MatchingAgent(settings).narrow(BasketLine(description="whipping cream", quantity="0.2", unit="L"), products)
+    assert selected == products
+
+
 async def test_matching_allows_reasoning_tokens_and_reports_truncation(settings, monkeypatch, caplog):
     from google.genai import types
 

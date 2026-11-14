@@ -198,15 +198,8 @@ class Workflow:
                         candidates = [p for product_id in chosen_ids if (p := self.catalog.get(product_id))]
                         explanation = "Customer chose this catalog product group."
                     else:
-                        candidates = self.catalog.search(line.description)
+                        candidates = self.catalog.search(line.description, requirements=line.requirements, policy=policy)
                         candidates, explanation = await self.matcher.narrow(line, candidates)
-                        choices = await self.matcher.product_choices(line, candidates)
-                        if choices:
-                            state.product_choices, state.choice_line_index = choices, index
-                            state.status, state.message = "needs_information", f"Choose which type of {line.description} you want. Nothing has been ordered."
-                            add_event(state, "Purchasing agent", "Product choice needed", state.message)
-                            self.update(sandbox_id, state)
-                            return
                     if candidates:
                         price, stock, source = await self.provider.quote(candidates, state.input.needed_by)
                         offers = rank_offers([build_offer(p, line, price.get(p["id"], {}), stock.get(p["id"], {}), source, state.input.needed_by, policy) for p in candidates])
@@ -215,6 +208,15 @@ class Workflow:
                     state.alternatives.append(offers)
                     add_event(state, "Aimo matching agent", f"Compared options for {line.description}", explanation, {"line": index, "candidate_count": len(candidates), "eligible_count": sum(o.eligible for o in offers), "options": [o.model_dump(mode="json") for o in offers]})
                     eligible = [o for o in offers if o.eligible]
+                    if chosen_ids is None:
+                        eligible_ids = {o.product_id for o in eligible}
+                        choices = await self.matcher.product_choices(line, [p for p in candidates if p["id"] in eligible_ids])
+                        if choices:
+                            state.product_choices, state.choice_line_index = choices, index
+                            state.status, state.message = "needs_information", f"Choose which type of {line.description} you want. Nothing has been ordered."
+                            add_event(state, "Purchasing agent", "Product choice needed", state.message)
+                            self.update(sandbox_id, state)
+                            return
                     if eligible:
                         selected.append(eligible[0])
                     self.update(sandbox_id, state)
@@ -224,6 +226,11 @@ class Workflow:
                     state.status, state.message = "needs_information", f"No complete eligible basket: review {', '.join(missing) or 'the combined quantities of repeated products'}. Nothing has been ordered."
                     for line, options in zip(state.items, state.alternatives):
                         if options and not any(o.eligible for o in options):
+                            rounded = [o for o in options if o.reasons and all(r.startswith("Pack rounding would deliver") for r in o.reasons)]
+                            if rounded:
+                                nearest = min(rounded, key=lambda o: o.canonical_quantity)
+                                state.message += f" {line.description}: You requested {line.quantity:g} {line.unit}, but the smallest verified whole-pack option would deliver {nearest.canonical_quantity:g} {nearest.unit}. Revise the quantity to order a whole pack."
+                                continue
                             quantity_issue = next((r for o in options for r in o.reasons if "are needed" in r or "Combined basket needs" in r), None)
                             state.message += f" {line.description}: {quantity_issue or options[0].reasons[0]}"
                     add_event(state, "Policy engine", "Basket needs attention", state.message)
@@ -353,8 +360,10 @@ class Workflow:
                 raise WorkflowError("cannot_retry", "This request cannot be restarted in its current state.")
             if request is not None:
                 state.input = request
-                state.chosen_product_ids = {}
                 state.agent_mode = "Purchasing agent"
+            # An explicit refresh reopens the search under current rules and
+            # availability, including choices made before those checks changed.
+            state.chosen_product_ids = {}
             state.status, state.preview, state.decision, state.alternatives = "received", None, None, []
             state.product_choices, state.choice_line_index = [], None
             add_event(state, "Customer", "Request refreshed", "Rechecking the complete basket against current rules and upstream evidence.")
